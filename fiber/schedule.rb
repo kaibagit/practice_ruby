@@ -1,6 +1,12 @@
 require 'set'
 require 'thread'
 require 'fiber'
+require 'logger'
+
+logger = Logger.new(STDOUT)
+logger.formatter = proc { |severity, datetime, progname, msg|
+	"#{datetime} #{severity}  [#{Thread.current}]: #{msg}\n"
+}
 
 class BlockingCallback
 
@@ -80,7 +86,7 @@ class SchedulableFiber < Fiber
 
 	attr_accessor :scheduler,:resume_value
 
-	def exec_blocking(&block)
+	def await(&block)
 		@scheduler.begin_block(Fiber.current,&block)
 		Fiber.yield
 		@resume_value
@@ -89,37 +95,37 @@ end
 
 scheduler = Scheduler.new
 fiber = SchedulableFiber.new do
-	p "【1】get data from redis"
-	value = Fiber.current.exec_blocking {sleep 1;nil}
-	p "【1】redis value = #{value}"
+	logger.info "【1】get data from redis"
+	value = Fiber.current.await {sleep 1;nil}
+	logger.info "【1】redis value = #{value}"
 	if value.nil?
-		p "【1】get data from db"
-		value = Fiber.current.exec_blocking{sleep 3;5*5}
+		logger.info "【1】get data from db"
+		value = Fiber.current.await{sleep 3;5*5}
 	end
-	p "【1】result = #{value}"
+	logger.info "【1】result = #{value}"
 end
 fiber2 = SchedulableFiber.new do
-	p "【2】get data from db"
-	value = Fiber.current.exec_blocking {sleep 3;1+1}
-	p "【2】db value = #{value}"
-	p "【2】put value to redis"
-	Fiber.current.exec_blocking{sleep 1;nil}
-	p "【2】result = #{value}"
+	logger.info "【2】get data from db"
+	value = Fiber.current.await {sleep 3;1+1}
+	logger.info "【2】db value = #{value}"
+	logger.info "【2】put value to redis"
+	Fiber.current.await{sleep 1;nil}
+	logger.info "【2】result = #{value}"
 	fiber3 = SchedulableFiber.new do
-		p "【3】hello!"
+		logger.info "【3】hello!"
 	end
 	scheduler.submit_fiber fiber3
 end
 scheduler.submit_fiber fiber
 scheduler.submit_fiber fiber2
 scheduler.submit do
-	p "【4】get data from redis"
-	value = Fiber.current.exec_blocking {sleep 1;nil}
-	p "【4】redis value = #{value}"
+	logger.info "【4】get data from redis"
+	value = Fiber.current.await {sleep 1;nil}
+	logger.info "【4】redis value = #{value}"
 	if value.nil?
-		p "【4】get data from db"
-		value = Fiber.current.exec_blocking{sleep 3;2*2}
+		logger.info "【4】get data from db"
+		value = Fiber.current.await{sleep 3;2*2}
 	end
-	p "【4】result = #{value}"
+	logger.info "【4】result = #{value}"
 end
 scheduler.start_looping
